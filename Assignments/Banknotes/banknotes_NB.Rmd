@@ -1,0 +1,296 @@
+---
+output: github_document
+jupyter:
+  jupytext:
+    formats: ipynb,Rmd
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.13.8
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+# Counterfeit detection
+
+
+The task in this assignment is to detect the  counterfeit banknotes. The data set is based on [banknote authentication Data Set ](https://archive.ics.uci.edu/ml/datasets/banknote+authentication#) from UCI Machine Learning repository. The first three columns denote different parameters obtained from the photographs of the banknotes and last colum provides the label. Frankly as the dataset does not have any description I don't know  which labels corresponds to real and which to counterfeited banknotes. let's assume that label one (positive) denotes the clounterfeits. The set  "banknote_authentication.csv" can be found in the data  directory.
+
+```{python}
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import scipy.stats as st
+import scrapbook as sb
+```
+
+```{python}
+import  matplotlib.pyplot as plt
+plt.rcParams['figure.figsize']=(8,8)
+```
+
+Please insert you  firstname  and name below
+
+```{python}
+# sb.glue("Who", ["Lukasz", "Wojcik"])
+```
+
+```{python tags=c()}
+from  sklearn.model_selection import train_test_split
+seed = 31287
+```
+
+```{python}
+data = pd.read_csv('data/banknotes_data.csv')
+```
+
+```{python tags=c()}
+data.head()
+```
+
+```{python tags=c("skip")}
+data.describe()
+```
+
+```{python tags=c("skip")}
+data.info()
+```
+
+```{python tags=c()}
+data_train, data_test = train_test_split(data, test_size=0.2, shuffle=True, stratify=data.loc[:,'counterfeit'], random_state=seed)
+```
+
+```{python tags=c()}
+lbls_train = data_train['counterfeit']
+lbls_test = data_test['counterfeit']
+```
+
+```{python tags=c()}
+fig, ax = plt.subplots(1,4, figsize=(22,5))
+for i in range(4):
+    ax[i].hist(data_train[lbls_train==0].iloc[:,i], bins=32, histtype='step', color='blue')
+    ax[i].hist(data_train[lbls_train==1].iloc[:,i], bins=32, histtype='step', color='red')
+    ax[i].hist(data_train[lbls_train==0].iloc[:,i], bins=32, histtype='bar', color='lightblue', alpha=0.25)
+    ax[i].hist(data_train[lbls_train==1].iloc[:,i], bins=32, histtype='bar', color='orange', alpha =0.25)
+```
+
+<!-- #region tags=[] -->
+You will have to install a popular plotting library `seaborn`
+<!-- #endregion -->
+
+```{python tags=c()}
+import seaborn
+```
+
+```{python tags=c()}
+seaborn.pairplot(data_train.iloc[:,0:5], hue='counterfeit');
+```
+
+```{python tags=c()}
+len(data_train)
+```
+
+## Problem 1
+
+
+Implement Gaussian  Bayes classifier using only one feature. Which feature will you choose? Calculate the confusion matrix (normalized as to show rates), ROC AUC score and plot ROC curve. Do this bot for training and validation set. Plot both curves on the same plot. Save everything using `scrapbook`. 
+
+
+__Hint__ For calculating metrics and plotting ROC curves you may use functions from scikit-learn: `roc_curve`, `roc_auc_score` and `confusion matrix`. For estimating normal distribution parameters  use `norm.fit` `from scipy.stats`. Use `norm.pdf` for normal probability density function.
+
+```{python pycharm={'name': '#%%\n'}}
+from sklearn.metrics import roc_auc_score, roc_curve, confusion_matrix
+from scipy.stats import norm
+import matplotlib.pyplot as plt
+
+fig, ax = plt.subplots(figsize=[10, 10])
+ax.set_ylabel('P(a0)')
+ax.set_xlabel('a0')
+data_train.a0.hist(bins=32, density=True, ax=ax, label='Train', color='red')
+data_test.a0.hist(bins=32, density=True, ax=ax, histtype='step', label='Test', color='blue')
+
+pd = norm(*norm.fit(data_train.a0))
+pd_test = norm(*norm.fit(data_test.a0))
+hs = np.linspace(-8, 8, 100)
+ax.plot(hs, pd.pdf(hs), color='red')
+ax.plot(hs, pd_test.pdf(hs), color='blue')
+plt.legend()
+
+p_counterfeit = len(data_train.a0[lbls_train == 1]) / len(data_train)
+p_legitimate = 1 - p_counterfeit
+pd_counterfeit = norm(*norm.fit(data_train.a0[lbls_train == 1]))
+pd_legitimate = norm(*norm.fit(data_train.a0[lbls_train == 0]))
+```
+
+```{python pycharm={'name': '#%%\n'}}
+def pdf_counterfeit_cond(a):
+    return pd_counterfeit.pdf(a) * p_counterfeit / (pd_counterfeit.pdf(a) * p_counterfeit + pd_legitimate.pdf(a) * p_legitimate)
+
+hs = np.linspace(-10, 10, 400)
+plt.plot(hs, pdf_counterfeit_cond(hs))
+plt.axhline(0.5, linewidth=1, c='green');
+```
+
+```{python pycharm={'name': '#%%\n'}}
+tn, fp, fn, tp = confusion_matrix(lbls_train, pdf_counterfeit_cond(data_train.a0) > 0.5).ravel()
+p = tp + fn
+n = tn + fp
+tpr = tp / p
+fpr = fp / n
+
+confusion_matrix(lbls_train, pdf_counterfeit_cond(data_train.a0) > 0.5, normalize='true')
+```
+
+```{python pycharm={'name': '#%%\n'}}
+tn_test, fp_test, fn_test, tp_test = confusion_matrix(lbls_test, pdf_counterfeit_cond(data_test.a0) > 0.5).ravel()
+p_test = tp_test + fn_test
+n_test = tn_test + fp_test
+tpr_test = tp_test / p_test
+fpr_test = fp_test / n_test
+
+confusion_matrix(lbls_test, pdf_counterfeit_cond(data_test.a0) > 0.5, normalize='true')
+```
+
+```{python pycharm={'name': '#%%\n'}}
+fprs, tprs, thds = roc_curve(lbls_train, pdf_counterfeit_cond(data_train.a0))
+auc = roc_auc_score(lbls_train, pdf_counterfeit_cond(data_train.a0))
+
+fprs_test, tprs_test, thds_test = roc_curve(lbls_test, pdf_counterfeit_cond(data_test.a0))
+auc_test = roc_auc_score(lbls_test, pdf_counterfeit_cond(data_test.a0))
+
+
+fig, ax = plt.subplots(figsize=[12, 12])
+ax.set_aspect(1)
+ax.set_xlabel('FPR')
+ax.set_ylabel('TPR')
+ax.set_title("ROC curve", fontsize=14)
+ax.plot([0,1,1,0,0],[0,0,1,1,0], '-', color='grey', linewidth=1)
+roc = ax.plot(fprs, tprs, color='red', linewidth=1, label='Train')
+roc_test = ax.plot(fprs_test, tprs_test, color='blue', linewidth=1, label='Test')
+ax.scatter([fpr], [tpr], s=30, edgecolor='red', zorder=5, facecolor='red')
+ax.scatter([fpr_test], [tpr_test], s=30, edgecolor='blue', zorder=5, facecolor='blue')
+ax.text(0.7, 0.8, "AUC train = {:4.2f}".format(auc), fontsize=12)
+ax.text(0.7, 0.75, "AUC test = {:4.2f}".format(auc_test), fontsize=12)
+plt.legend()
+```
+
+## Problem 2
+
+
+Same as Problem 1 but now implement Gaussian Naive Bayes using two features. Compare ROC curves on the test set. What is teh improvement of AUC score on the test set?
+
+```{python pycharm={'name': '#%%\n'}}
+pd_counterfeit_a1 = norm(*norm.fit(data_train.a1[lbls_train == 1]))
+pd_legitimate_a1 = norm(*norm.fit(data_train.a1[lbls_train == 0]))
+
+def pdf_counterfeit_cond_2(a, a1):
+    return pd_counterfeit.pdf(a) * pd_counterfeit_a1.pdf(a1) * p_counterfeit / \
+           (pd_counterfeit.pdf(a) * pd_counterfeit_a1.pdf(a1) * p_counterfeit + pd_legitimate.pdf(a) * pd_legitimate_a1.pdf(a1) * p_legitimate)
+```
+
+```{python pycharm={'name': '#%%\n'}}
+tn, fp, fn, tp = confusion_matrix(lbls_train, pdf_counterfeit_cond_2(data_train.a0, data_train.a1) > 0.5).ravel()
+p = tp + fn
+n = tn + fp
+tpr = tp / p
+fpr = fp / n
+
+confusion_matrix(lbls_train, pdf_counterfeit_cond_2(data_train.a0, data_train.a1) > 0.5, normalize='true')
+```
+
+```{python pycharm={'name': '#%%\n'}}
+tn_test, fp_test, fn_test, tp_test = confusion_matrix(lbls_test, pdf_counterfeit_cond_2(data_test.a0, data_test.a1) > 0.5).ravel()
+p_test = tp_test + fn_test
+n_test = tn_test + fp_test
+tpr_test2 = tp_test / p_test
+fpr_test2 = fp_test / n_test
+
+confusion_matrix(lbls_test, pdf_counterfeit_cond_2(data_test.a0, data_test.a1) > 0.5, normalize='true')
+```
+
+```{python pycharm={'name': '#%%\n'}}
+fprs_test2, tprs_test2, thds_test2 = roc_curve(lbls_test, pdf_counterfeit_cond_2(data_test.a0, data_test.a1))
+auc_test2 = roc_auc_score(lbls_test, pdf_counterfeit_cond_2(data_test.a0, data_test.a2))
+
+fig, ax = plt.subplots(figsize=[12, 12])
+ax.set_aspect(1)
+ax.set_xlabel('FPR')
+ax.set_ylabel('TPR')
+ax.set_title("ROC curve", fontsize=14)
+ax.plot([0,1,1,0,0],[0,0,1,1,0], '-', color='grey', linewidth=1)
+roc_test = ax.plot(fprs_test, tprs_test, color='blue', linewidth=1, label='Test')
+roc_test2 = ax.plot(fprs_test2, tprs_test2, color='green', linewidth=1, label='Test2')
+ax.scatter([fpr_test], [tpr_test], s=30, edgecolor='blue', zorder=5, facecolor='blue')
+ax.scatter([fpr_test2], [tpr_test2], s=30, edgecolor='green', zorder=5, facecolor='green')
+ax.text(0.7, 0.8, "AUC test = {:4.2f}".format(auc_test), fontsize=12)
+ax.text(0.7, 0.75, "AUC test 2 = {:4.2f}".format(auc_test2), fontsize=12)
+plt.legend()
+```
+
+## Problem 3
+
+
+Same as Problem 2 but now implement Gaussian Naive Bayes using all features.
+
+```{python pycharm={'name': '#%%\n'}}
+pd_counterfeit_a2 = norm(*norm.fit(data_train.a2[lbls_train == 1]))
+pd_legitimate_a2 = norm(*norm.fit(data_train.a2[lbls_train == 0]))
+pd_counterfeit_a3 = norm(*norm.fit(data_train.a3[lbls_train == 1]))
+pd_legitimate_a3 = norm(*norm.fit(data_train.a3[lbls_train == 0]))
+
+def pdf_counterfeit_nb(a, a1, a2, a3):
+    return pd_counterfeit.pdf(a) * pd_counterfeit_a1.pdf(a1) * pd_counterfeit_a2.pdf(a2) * pd_counterfeit_a3.pdf(a3) * p_counterfeit / \
+           (pd_counterfeit.pdf(a) * pd_counterfeit_a1.pdf(a1) * pd_counterfeit_a2.pdf(a2) * pd_counterfeit_a3.pdf(a3) * p_counterfeit +
+            pd_legitimate.pdf(a) * pd_legitimate_a1.pdf(a1) * pd_legitimate_a2.pdf(a2) * pd_legitimate_a3.pdf(a3) * p_legitimate)
+```
+
+```{python pycharm={'name': '#%%\n'}}
+tn, fp, fn, tp = confusion_matrix(lbls_train, pdf_counterfeit_nb(data_train.a0, data_train.a1, data_train.a2, data_train.a3) > 0.5).ravel()
+p = tp + fn
+n = tn + fp
+tpr = tp / p
+fpr = fp / n
+
+confusion_matrix(lbls_train, pdf_counterfeit_cond_2(data_train.a0, data_train.a1) > 0.5, normalize='true')
+```
+
+```{python pycharm={'name': '#%%\n'}}
+tn_test, fp_test, fn_test, tp_test = \
+    confusion_matrix(lbls_test, pdf_counterfeit_nb(data_test.a0, data_test.a1, data_test.a2, data_test.a3) > 0.5).ravel()
+
+p_test = tp_test + fn_test
+n_test = tn_test + fp_test
+tpr_test_nb = tp_test / p_test
+fpr_test_nb = fp_test / n_test
+
+confusion_matrix(lbls_test, pdf_counterfeit_nb(data_test.a0, data_test.a1, data_test.a2, data_test.a3) > 0.5, normalize='true')
+```
+
+```{python pycharm={'name': '#%%\n'}}
+fprs_test_nb, tprs_test_nb, thds_test_nb = roc_curve(lbls_test, pdf_counterfeit_nb(data_test.a0, data_test.a1, data_test.a2, data_test.a3))
+auc_test_nb = roc_auc_score(lbls_test, pdf_counterfeit_nb(data_test.a0, data_test.a1, data_test.a2, data_test.a3))
+
+fig, ax = plt.subplots(figsize=[12, 12])
+ax.set_aspect(1)
+ax.set_xlabel('FPR')
+ax.set_ylabel('TPR')
+ax.set_title("ROC curve", fontsize=14)
+ax.plot([0,1,1,0,0],[0,0,1,1,0], '-', color='grey', linewidth=1)
+roc_test = ax.plot(fprs_test, tprs_test, color='blue', linewidth=1, label='Test')
+roc_test2 = ax.plot(fprs_test2, tprs_test2, color='green', linewidth=1, label='Test 2')
+roc_test_nb = ax.plot(fprs_test_nb, tprs_test_nb, color='orange', linewidth=1, label='Test NB')
+ax.scatter([fpr_test], [tpr_test], s=30, edgecolor='blue', zorder=5, facecolor='blue')
+ax.scatter([fpr_test2], [tpr_test2], s=30, edgecolor='green', zorder=5, facecolor='blue')
+ax.scatter([fpr_test_nb], [tpr_test_nb], s=30, edgecolor='orange', zorder=5, facecolor='orange')
+ax.text(0.7, 0.8, "AUC test = {:4.2f}".format(auc_test), fontsize=12)
+ax.text(0.7, 0.75, "AUC test 2 = {:4.2f}".format(auc_test2), fontsize=12)
+ax.text(0.7, 0.7, "AUC test NB = {:4.2f}".format(auc_test_nb), fontsize=12)
+plt.legend()
+```
+
+```{python pycharm={'name': '#%%\n'}}
+
+```
