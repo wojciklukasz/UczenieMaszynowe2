@@ -1,0 +1,314 @@
+---
+jupyter:
+  jupytext:
+    formats: ipynb,md,Rmd
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.13.8
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+# Counterfeit detection
+
+
+The task in this assignment is to detect the  counterfeit banknotes. The data set is based on [banknote authentication Data Set ](https://archive.ics.uci.edu/ml/datasets/banknote+authentication#) from UCI Machine Learning repository.  You have already used this set but this time I have removed  the first column. The set  `banknote_authentication.csv` can be found in the `data`  directory.
+
+```{python}
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import scipy.stats as st
+import scrapbook as sb
+```
+
+<!-- #region tags=["skip"] -->
+You will have to install a popular plotting library `seaborn`
+<!-- #endregion -->
+
+```{python}
+data = pd.read_csv('data/banknote_authentication.csv')
+```
+
+```{python}
+data.head()
+```
+
+## Problem 
+
+
+### A.
+
+
+Perform the Quadratic Discriminant Analysis on this set. Calculate the confusion matrix, AUC score and plot the ROC curve. Please use `scrapbook` to store your results.
+
+```{python pycharm={'name': '#%%\n'}}
+from sklearn.metrics import confusion_matrix
+from sklearn.model_selection import train_test_split
+from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
+from sklearn.metrics import roc_curve, roc_auc_score
+
+data_train, data_test = train_test_split(data, test_size=0.2, shuffle=True, stratify=data.loc[:,'counterfeit'], random_state=31287)
+lbls_train = data_train['counterfeit']
+lbls_test = data_test['counterfeit']
+
+qda = QuadraticDiscriminantAnalysis()
+qda.fit(data_train[['a1', 'a2', 'a3']], data_train['counterfeit'] == 1)
+
+test_predicted_proba_qda = qda.predict_proba(data_test[['a1', 'a2', 'a3']])[:,1]
+pd.DataFrame(confusion_matrix(data_test.counterfeit == 1, test_predicted_proba_qda>0.5, normalize='true'))
+```
+
+```{python}
+tnr_qda, fpr_qda, fnr_qda, tpr_qda = confusion_matrix(data_test.counterfeit == 1, test_predicted_proba_qda>0.5, normalize='true').ravel()
+precision_qda = tpr_qda / (tpr_qda + fpr_qda)
+recall_qda = tpr_qda / (tpr_qda + fnr_qda)
+f1_qda = 2 * (precision_qda * recall_qda) / (precision_qda + recall_qda)
+auc_qda = roc_auc_score(lbls_test, test_predicted_proba_qda)
+sb.glue('A_scores',[tnr_qda, fpr_qda, fnr_qda, tpr_qda, precision_qda, f1_qda, auc_qda], display=True)
+```
+
+also please save the ROC plot
+
+```{python}
+fig, ax = plt.subplots()
+fprs_qda, tprs_qda, thds_qda = roc_curve(lbls_test, test_predicted_proba_qda)
+ax.plot(fprs_qda, tprs_qda, label="{:s}  {:5.3f}".format('QDA', auc_qda), color='red')
+ax.legend(title='AUC')
+ax.plot([0, 1], [0, 1], color='gray')
+sb.glue('A_ROC', fig, 'display', display=False)
+```
+
+### B.
+
+
+Perform Gaussian Mixture Discriminant Analysis on this set as described in the `gaussian_mixture_model_EM_algorithm` notebook. Use two components for positives and two components for negatives. Calculate the confusion matrix, AUC score and plot the ROC curve. 
+
+```{python pycharm={'name': '#%%\n'}}
+from sklearn.mixture import GaussianMixture
+
+pos_cmp = GaussianMixture(n_components=2, max_iter=100, tol=0.0001)
+neg_cmp = GaussianMixture(n_components=2, max_iter=100, tol=0.0001)
+
+positive_data = data_train.iloc[:,0:3][lbls_train == 1]
+negative_data = data_train.iloc[:,0:3][lbls_train == 0]
+
+pos_cmp.fit(positive_data)
+neg_cmp.fit(negative_data)
+
+print(pos_cmp.weights_)  #pi
+# print(pos_cmp.means_)    #mu
+# print(pos_cmp.covariances_) #Sigma (covariance) matrices
+
+print(neg_cmp.weights_)  #pi
+# print(neg_cmp.means_)    #mu
+# print(neg_cmp.covariances_) #Sigma (covariance) matrices
+```
+
+```{python pycharm={'name': '#%%\n'}}
+def make_pdf(cmp):
+    n_cmp = cmp.n_components
+    dists = [st.multivariate_normal(cmp.means_[i], cmp.covariances_[i]) for i in range(n_cmp)]
+    def pdf(x):
+        p = 0.0
+        for i in range(n_cmp):
+            p+= cmp.weights_[i]*dists[i].pdf(x)
+        return p
+
+    return pdf
+
+
+def make_predict_proba(cmp0, cmp1, pi0=0.5, pi1=.5):
+    pdf0 = make_pdf(cmp0)
+    pdf1 = make_pdf(cmp1)
+    def p(x):
+        p0=pi0*pdf0(x)
+        p1=pi1*pdf1(x)
+        return p1/(p1+p0)
+
+    return p
+```
+
+```{python pycharm={'name': '#%%\n'}}
+mgd_predict_proba = make_predict_proba(neg_cmp, pos_cmp, 0.66, 0.34)
+test_predicted_proba_mga = mgd_predict_proba(data_test.iloc[:,0:3])
+pd.DataFrame(confusion_matrix(lbls_test, test_predicted_proba_mga>0.5, normalize='true'))
+```
+
+```{python}
+tnr_mga, fpr_mga, fnr_mga, tpr_mga = confusion_matrix(data_test.counterfeit == 1, test_predicted_proba_mga>0.5, normalize='true').ravel()
+precision_mga = tpr_mga / (tpr_mga + fpr_mga)
+recall_mga = tpr_mga / (tpr_mga + fnr_mga)
+f1_mga = 2 * (precision_mga * recall_mga) / (precision_mga + recall_mga)
+auc_mga = roc_auc_score(lbls_test, test_predicted_proba_mga)
+sb.glue('B_scores',[tnr_mga, fpr_mga, fnr_mga, tpr_mga, precision_mga, f1_mga, auc_mga], display=True)
+```
+
+also please save the ROC plot
+
+```{python}
+fig, ax = plt.subplots()
+fprs_mga, tprs_mga, thds_gma = roc_curve(lbls_test, test_predicted_proba_mga)
+ax.plot(fprs_qda, tprs_qda, label="{:s}  {:5.3f}".format('QDA', auc_qda), color='red')
+ax.plot(fprs_mga, tprs_mga, label="{:s}  {:5.3f}".format('MGA', auc_mga), color='blue')
+ax.plot([0, 1], [0, 1], color='gray')
+ax.legend(title='AUC')
+sb.glue('B_ROC', fig, 'display', display=False);
+```
+
+### C.
+
+
+Use k-fold cross validation to find the optimal number of gaussian components for each class. As before calculate the confusion matrix, AUC score and plot the ROC curve for the best classifier. Assume that maximal number of components in each class is 12.  
+
+
+__Hint__ use the `StratifiedKFold` function from scikit-learn library to generate folds. 
+
+```{python pycharm={'name': '#%%\n'}}
+from sklearn.metrics import f1_score
+
+
+def evaluate(nc0, nc1, X, y, X_valid, y_valid):
+    p_cmp = GaussianMixture(n_components=nc0, max_iter=100, tol=0.0001)
+    n_cmp = GaussianMixture(n_components=nc1, max_iter=100, tol=0.0001)
+
+    p_data = X[y==1]
+    n_data = X[y==0]
+
+    p_cmp.fit(p_data)
+    n_cmp.fit(n_data)
+
+    gmd =  make_predict_proba(n_cmp, p_cmp, 0.66, 0.34)
+    gmd_proba = gmd(X_valid)
+
+    return f1_score(y_valid, gmd_proba>0.5)
+
+max_i = 2
+max_j = 2
+max_v = 0.0
+for i in range(2, 13):
+    for j in range(2, 13):
+        v = evaluate(i, j, data_train.iloc[:,0:3], lbls_train, data_test.iloc[:,0:3], lbls_test)
+        if v > max_v:
+            max_v = v
+            max_i = i
+            max_j = j
+
+print(f'i: {max_i} j: {max_j}  f1: {max_v}')
+```
+
+```{python pycharm={'name': '#%%\n'}}
+from sklearn.model_selection import StratifiedKFold
+
+skf = StratifiedKFold(5, shuffle=True, random_state=67544)
+
+f1=0
+for train_i, test_i in skf.split(data_train.iloc[:,0:3], lbls_train):
+    f1 += evaluate(max_i, max_j, data_train.iloc[train_i], lbls_train.iloc[train_i], data_train.iloc[test_i], lbls_train.iloc[test_i])
+print(f1 / skf.get_n_splits())
+```
+
+```{python}
+#  store the results of the best fit 
+sb.glue("C_n_cmp", [max_i, max_j, max_v], display=True)
+```
+
+Store the results for the best estimator
+
+```{python}
+best_pos_cmp = GaussianMixture(n_components=max_i, max_iter=100, tol=0.0001)
+best_neg_cmp = GaussianMixture(n_components=max_j, max_iter=100, tol=0.0001)
+
+best_pos_cmp.fit(positive_data)
+best_neg_cmp.fit(negative_data)
+
+best_mgd_predict_proba = make_predict_proba(best_neg_cmp, best_pos_cmp, 0.66, 0.34)
+best_test_predicted_proba_mga = best_mgd_predict_proba(data_test.iloc[:,0:3])
+pd.DataFrame(confusion_matrix(lbls_test, best_test_predicted_proba_mga>0.5, normalize='true'))
+
+best_tnr_mga, best_fpr_mga, best_fnr_mga, best_tpr_mga = confusion_matrix(data_test.counterfeit == 1, best_test_predicted_proba_mga>0.5, normalize='true').ravel()
+best_precision_mga = best_tpr_mga / (best_tpr_mga + best_fpr_mga)
+best_recall_mga = best_tpr_mga / (best_tpr_mga + best_fnr_mga)
+best_f1_mga = 2 * (best_precision_mga * best_recall_mga) / (best_precision_mga + best_recall_mga)
+best_auc_mga = roc_auc_score(lbls_test, best_test_predicted_proba_mga)
+
+sb.glue('C_scores',[best_tnr_mga, best_fpr_mga, best_fnr_mga, best_tpr_mga, best_precision_mga, best_f1_mga, best_auc_mga], display=True)
+```
+
+also please save the ROC plot
+
+```{python}
+fig, ax = plt.subplots()
+best_fprs_mga, best_tprs_mga, best_thds_gma = roc_curve(lbls_test, best_test_predicted_proba_mga)
+ax.plot(fprs_qda, tprs_qda, label="{:s}  {:5.3f}".format('QDA', auc_qda), color='red')
+ax.plot(fprs_mga, tprs_mga, label="{:s}  {:5.3f}".format('MGA', auc_mga), color='blue')
+ax.plot(best_fprs_mga, best_tprs_mga, label="{:s}  {:5.3f}".format('BEST MGA', best_auc_mga), color='green')
+ax.plot([0, 1], [0, 1], color='gray')
+ax.legend(title='AUC')
+sb.glue('C_ROC', fig, 'display', display=False)
+```
+
+## D.  
+
+
+Assume that 1% of all the customers in your store try to pay with a counterfeit 100PLN bill. If you accept the counterfeit bill you loose 100PLN. If you reject a valid bill,  you may loose the purchase, you estimate this loss as 15PLN on average. For each of the three classifiers find the threshold that minimises your losses and calculates the minimum loss for each classifier. Show the optimal classifiers points on the ROC curves.
+
+```{python pycharm={'name': '#%%\n'}}
+# 1 na 100 Counterfeit (P)
+# FN -> koszt 100 zł
+# FP -> koszt 15 zł
+#
+# PR 0.01  NR 0.99
+# FNR = FN / P
+# FPR = FP / N
+# 1 * FNR -> szansa, że zakwalifikujemy fałszywy banknot jako prawdziwy
+# 1 * FNR * 100 -> koszt przyjęcia fałszywego banknotu
+# 1 * FNR * 100 + 99 * FPR * 15
+# FPR mamy z roc_curve
+# FNR = 1 - TPR -> TPR z roc_curve
+# po podstawieniu dostaniemy wektor, znaleść jego minimum
+# z roc dostajemy też thresholdy
+# znaleść index, który minimalizuje cost i odczytać odpowiedni threshold
+
+
+fnrs_qda = 1 - tprs_qda
+cost_qda = 1 * fnrs_qda * 100 + 99 * fprs_qda * 15
+index_min_qda = min(range(len(cost_qda)), key=cost_qda.__getitem__)
+thd_qda = thds_qda[index_min_qda]
+print(f'QDA: {thd_qda}')
+
+fnrs_mga = 1 - tprs_mga
+cost_mga = 1 * fnrs_mga * 100 + 99 * fprs_mga * 15
+index_min_mga = min(range(len(cost_mga)), key=cost_mga.__getitem__)
+thd_mga = thds_gma[index_min_mga]
+print(f'MGA: {thd_mga}')
+
+best_fnrs_mga = 1 - best_tprs_mga
+best_cost_mga = 1 * best_fnrs_mga * 100 + 99 * best_fprs_mga * 15
+best_index_min_mga = min(range(len(best_cost_mga)), key=best_cost_mga.__getitem__)
+best_thd_gma = best_thds_gma[best_index_min_mga]
+print(f'QDA: {best_thd_gma}')
+```
+
+also please save the ROC plot
+
+```{python pycharm={'name': '#%%\n'}}
+fig, ax = plt.subplots()
+ax.plot(fprs_qda, tprs_qda, label="{:s}  {:5.3f}".format('QDA', auc_qda), color='red')
+ax.scatter(fprs_qda[index_min_qda], tprs_qda[index_min_qda], color='red')
+ax.plot(fprs_mga, tprs_mga, label="{:s}  {:5.3f}".format('MGA', auc_mga), color='blue')
+ax.scatter(fprs_mga[index_min_mga], tprs_mga[index_min_mga], color='blue')
+ax.plot(best_fprs_mga, best_tprs_mga, label="{:s}  {:5.3f}".format('BEST MGA', best_auc_mga), color='green')
+ax.scatter(best_fprs_mga[best_index_min_mga], best_tprs_mga[best_index_min_mga], color='green')
+ax.plot([0, 1], [0, 1], color='gray')
+ax.legend(title='AUC')
+sb.glue('D_ROC', fig, 'display', display=False)
+```
+
+```{python pycharm={'name': '#%%\n'}}
+
+```
