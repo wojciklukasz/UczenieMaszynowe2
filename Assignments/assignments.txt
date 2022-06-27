@@ -1,0 +1,18 @@
+Banknotes NB
+
+10 points
+
+only small misprint in problem 2. roc curve uses a0 and a1, and auc score uses a0 and a2
+
+Banknotes
+
+2 punkty
+
+Złe priory w problemie B i C.
+Dziwne ze w problemie D optymalny klasyfikator nie mial najnizszego kosztu. 
+
+
+
+Cinderella
+
+Proszę wyrażnie napisać ile klastrów uważa Pna, że jest w mieszaninie. 
