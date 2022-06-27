@@ -79,9 +79,13 @@ gm5.fit(data_train)
 gm5.predict(data_train)
 ```
 
+```{python pycharm={'name': '#%%\n'}}
+print('I believe the mixture has 4 components')
+```
+
 ### Bonus question
 
-<!-- #region tags=["problem"] pycharm={"name": "#%% md\n"} -->
+<!-- #region pycharm={"name": "#%% md\n"} tags=["problem"] -->
 Not knowing the real labels, how can you estimate  the accuracy of this classifier ?
 <!-- #endregion -->
 

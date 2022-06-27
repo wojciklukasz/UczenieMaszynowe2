@@ -94,19 +94,11 @@ from sklearn.mixture import GaussianMixture
 pos_cmp = GaussianMixture(n_components=2, max_iter=100, tol=0.0001)
 neg_cmp = GaussianMixture(n_components=2, max_iter=100, tol=0.0001)
 
-positive_data = data_train.iloc[:,0:3][lbls_train == 1]
-negative_data = data_train.iloc[:,0:3][lbls_train == 0]
+positive_data = data_train[data_train['counterfeit'] == 1]
+negative_data = data_train[data_train['counterfeit'] == 0]
 
-pos_cmp.fit(positive_data)
-neg_cmp.fit(negative_data)
-
-print(pos_cmp.weights_)  #pi
-# print(pos_cmp.means_)    #mu
-# print(pos_cmp.covariances_) #Sigma (covariance) matrices
-
-print(neg_cmp.weights_)  #pi
-# print(neg_cmp.means_)    #mu
-# print(neg_cmp.covariances_) #Sigma (covariance) matrices
+pos_cmp.fit(positive_data.loc[:,'a1':'a3'])
+neg_cmp.fit(negative_data.loc[:,'a1':'a3'])
 ```
 
 ```{python pycharm={'name': '#%%\n'}}
@@ -134,13 +126,13 @@ def make_predict_proba(cmp0, cmp1, pi0=0.5, pi1=.5):
 ```
 
 ```{python pycharm={'name': '#%%\n'}}
-mgd_predict_proba = make_predict_proba(neg_cmp, pos_cmp, 0.66, 0.34)
-test_predicted_proba_mga = mgd_predict_proba(data_test.iloc[:,0:3])
+mgd_predict_proba = make_predict_proba(neg_cmp, pos_cmp, 0.5, 0.5)
+test_predicted_proba_mga = mgd_predict_proba(data_test.loc[:,'a1':'a3'])
 pd.DataFrame(confusion_matrix(lbls_test, test_predicted_proba_mga>0.5, normalize='true'))
 ```
 
 ```{python}
-tnr_mga, fpr_mga, fnr_mga, tpr_mga = confusion_matrix(data_test.counterfeit == 1, test_predicted_proba_mga>0.5, normalize='true').ravel()
+tnr_mga, fpr_mga, fnr_mga, tpr_mga = confusion_matrix(data_test['counterfeit'], test_predicted_proba_mga>0.5, normalize='true').ravel()
 precision_mga = tpr_mga / (tpr_mga + fpr_mga)
 recall_mga = tpr_mga / (tpr_mga + fnr_mga)
 f1_mga = 2 * (precision_mga * recall_mga) / (precision_mga + recall_mga)
@@ -182,7 +174,7 @@ def evaluate(nc0, nc1, X, y, X_valid, y_valid):
     p_cmp.fit(p_data)
     n_cmp.fit(n_data)
 
-    gmd =  make_predict_proba(n_cmp, p_cmp, 0.66, 0.34)
+    gmd =  make_predict_proba(n_cmp, p_cmp, 0.5, 0.5)
     gmd_proba = gmd(X_valid)
 
     return f1_score(y_valid, gmd_proba>0.5)
@@ -192,7 +184,7 @@ max_j = 2
 max_v = 0.0
 for i in range(2, 13):
     for j in range(2, 13):
-        v = evaluate(i, j, data_train.iloc[:,0:3], lbls_train, data_test.iloc[:,0:3], lbls_test)
+        v = evaluate(i, j, data_train.iloc[:,0:3], data_train['counterfeit'], data_test.iloc[:,0:3], data_test['counterfeit'])
         if v > max_v:
             max_v = v
             max_i = i
@@ -220,21 +212,18 @@ sb.glue("C_n_cmp", [max_i, max_j, max_v], display=True)
 Store the results for the best estimator
 
 ```{python}
-best_pos_cmp = GaussianMixture(n_components=max_i, max_iter=100, tol=0.0001)
-best_neg_cmp = GaussianMixture(n_components=max_j, max_iter=100, tol=0.0001)
+best_pos_cmp = GaussianMixture(n_components=max_i, max_iter=100, tol=0.0001).fit(positive_data.loc[:,'a1':'a3'])
+best_neg_cmp = GaussianMixture(n_components=max_j, max_iter=100, tol=0.0001).fit(negative_data.loc[:,'a1':'a3'])
 
-best_pos_cmp.fit(positive_data)
-best_neg_cmp.fit(negative_data)
+best_mgd_predict_proba = make_predict_proba(best_neg_cmp, best_pos_cmp, 0.5, 0.5)
+best_test_predicted_proba_mga = best_mgd_predict_proba(data_test.loc[:,'a1':'a3'])
+pd.DataFrame(confusion_matrix(data_test['counterfeit'], best_test_predicted_proba_mga>0.5, normalize='true'))
 
-best_mgd_predict_proba = make_predict_proba(best_neg_cmp, best_pos_cmp, 0.66, 0.34)
-best_test_predicted_proba_mga = best_mgd_predict_proba(data_test.iloc[:,0:3])
-pd.DataFrame(confusion_matrix(lbls_test, best_test_predicted_proba_mga>0.5, normalize='true'))
-
-best_tnr_mga, best_fpr_mga, best_fnr_mga, best_tpr_mga = confusion_matrix(data_test.counterfeit == 1, best_test_predicted_proba_mga>0.5, normalize='true').ravel()
+best_tnr_mga, best_fpr_mga, best_fnr_mga, best_tpr_mga = confusion_matrix(data_test['counterfeit'], best_test_predicted_proba_mga>0.5, normalize='true').ravel()
 best_precision_mga = best_tpr_mga / (best_tpr_mga + best_fpr_mga)
 best_recall_mga = best_tpr_mga / (best_tpr_mga + best_fnr_mga)
 best_f1_mga = 2 * (best_precision_mga * best_recall_mga) / (best_precision_mga + best_recall_mga)
-best_auc_mga = roc_auc_score(lbls_test, best_test_predicted_proba_mga)
+best_auc_mga = roc_auc_score(data_test['counterfeit'], best_test_predicted_proba_mga)
 
 sb.glue('C_scores',[best_tnr_mga, best_fpr_mga, best_fnr_mga, best_tpr_mga, best_precision_mga, best_f1_mga, best_auc_mga], display=True)
 ```
@@ -276,25 +265,25 @@ Assume that 1% of all the customers in your store try to pay with a counterfeit 
 
 
 fnrs_qda = 1 - tprs_qda
-cost_qda = 1 * fnrs_qda * 100 + 99 * fprs_qda * 15
+cost_qda = 0.1 * fnrs_qda * 100 + 0.99 * fprs_qda * 15
 index_min_qda = min(range(len(cost_qda)), key=cost_qda.__getitem__)
-print(f'Minimum cost QDA: {min(cost_qda)}')
 thd_qda = thds_qda[index_min_qda]
 print(f'QDA threshold: {thd_qda}')
+print(f'Minimum cost QDA: {min(cost_qda)}')
 
 fnrs_mga = 1 - tprs_mga
-cost_mga = 1 * fnrs_mga * 100 + 99 * fprs_mga * 15
+cost_mga = 0.1 * fnrs_mga * 100 + 0.99 * fprs_mga * 15
 index_min_mga = min(range(len(cost_mga)), key=cost_mga.__getitem__)
-print(f'Minimum cost MGA: {min(cost_mga)}')
 thd_mga = thds_gma[index_min_mga]
-print(f'MGA: {thd_mga}')
+print(f'\nMGA: {thd_mga}')
+print(f'Minimum cost MGA: {min(cost_mga)}')
 
 best_fnrs_mga = 1 - best_tprs_mga
-best_cost_mga = 1 * best_fnrs_mga * 100 + 99 * best_fprs_mga * 15
+best_cost_mga = 0.1 * best_fnrs_mga * 100 + 0.99 * best_fprs_mga * 15
 best_index_min_mga = min(range(len(best_cost_mga)), key=best_cost_mga.__getitem__)
-print(f'Minimum cost best MGA: {min(best_cost_mga)}')
 best_thd_gma = best_thds_gma[best_index_min_mga]
-print(f'Best MGA: {best_thd_gma}')
+print(f'\nBest MGA: {best_thd_gma}')
+print(f'Minimum cost best MGA: {min(best_cost_mga)}')
 ```
 
 also please save the ROC plot
@@ -310,6 +299,10 @@ ax.scatter(best_fprs_mga[best_index_min_mga], best_tprs_mga[best_index_min_mga],
 ax.plot([0, 1], [0, 1], color='gray')
 ax.legend(title='AUC')
 sb.glue('D_ROC', fig, 'display', display=False)
+```
+
+```{python pycharm={'name': '#%%\n'}}
+print('Best MGA classifier has the lowest cost')
 ```
 
 ```{python pycharm={'name': '#%%\n'}}
