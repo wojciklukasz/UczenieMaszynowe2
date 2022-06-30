@@ -265,21 +265,21 @@ Assume that 1% of all the customers in your store try to pay with a counterfeit 
 
 
 fnrs_qda = 1 - tprs_qda
-cost_qda = 0.1 * fnrs_qda * 100 + 0.99 * fprs_qda * 15
+cost_qda = 0.01 * fnrs_qda * 100 + 0.99 * fprs_qda * 15
 index_min_qda = min(range(len(cost_qda)), key=cost_qda.__getitem__)
 thd_qda = thds_qda[index_min_qda]
 print(f'QDA threshold: {thd_qda}')
 print(f'Minimum cost QDA: {min(cost_qda)}')
 
 fnrs_mga = 1 - tprs_mga
-cost_mga = 0.1 * fnrs_mga * 100 + 0.99 * fprs_mga * 15
+cost_mga = 0.01 * fnrs_mga * 100 + 0.99 * fprs_mga * 15
 index_min_mga = min(range(len(cost_mga)), key=cost_mga.__getitem__)
 thd_mga = thds_gma[index_min_mga]
 print(f'\nMGA: {thd_mga}')
 print(f'Minimum cost MGA: {min(cost_mga)}')
 
 best_fnrs_mga = 1 - best_tprs_mga
-best_cost_mga = 0.1 * best_fnrs_mga * 100 + 0.99 * best_fprs_mga * 15
+best_cost_mga = 0.01 * best_fnrs_mga * 100 + 0.99 * best_fprs_mga * 15
 best_index_min_mga = min(range(len(best_cost_mga)), key=best_cost_mga.__getitem__)
 best_thd_gma = best_thds_gma[best_index_min_mga]
 print(f'\nBest MGA: {best_thd_gma}')
