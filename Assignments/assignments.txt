@@ -6,13 +6,12 @@ only small misprint in problem 2. roc curve uses a0 and a1, and auc score uses a
 
 Banknotes
 
-2 punkty
+5 puntów
 
 Złe priory w problemie B i C.
-Dziwne ze w problemie D optymalny klasyfikator nie mial najnizszego kosztu. 
-
+W funkcji kosztu jest błąd: źle wpisane jest prawdopodobieństwo falszywego banknotu)
 
 
 Cinderella
 
-Proszę wyrażnie napisać ile klastrów uważa Pna, że jest w mieszaninie. 
+5 punktów
